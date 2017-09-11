@@ -1,10 +1,12 @@
-
-ccMiner release 7.04(KlausT-mod) (June 11th, 2016)
+ccMiner release 8.13(KlausT-mod) (August 26th, 2017)
 ---------------------------------------------------------------
 
 ***************************************************************
 If you find this tool useful and like to support its continued 
           development, then consider a donation.
+
+KlausT @github:
+  BTC 1H2BHSyuwLP9vqt2p3bK9G3mDJsAi7qChw
 
 tpruvot@github:
   BTC donation address: 1AJdfCpLWPNoAMDfHF1wD5y8VgKSSTHxPo
@@ -19,10 +21,6 @@ sp-hash@github:
 DJM34:
   BTC donation address: 1NENYmxwZGHsKFmyjTc5WferTn5VTFb7Ze
 
-KlausT @github:
-  BTC 1H2BHSyuwLP9vqt2p3bK9G3mDJsAi7qChw
-  DRK XcM9FXrvZS275pGyGmfJmS98tHPZ1rjErM
-  
 cbuchner v1.2:
   LTC donation address: LKS1WDKGED647msBQfLBHV3Ls8sveGncnm
   BTC donation address: 16hJF5mceSojnTD3ZTUDqdRhDyPJzoRakM
@@ -67,76 +65,85 @@ that the most of our comments are in german.
 This code is based on the pooler cpuminer 2.3.2 release and inherits
 its command line interface and options.
 
-  -a, --algo=ALGO       specify the algorithm to use
-                          anime       use to mine Animecoin
-						  bitcoin     use to mine Bitcoin
-                          blake       use to mine NEOS (Blake 256)
-                          blakecoin   use to mine Old Blake 256
-                          deep        use to mine Deepcoin
-                          dmd-gr      use to mine Diamond-Groestl
-                          fresh       use to mine Freshcoin
-                          fugue256    use to mine Fuguecoin
-                          groestl     use to mine Groestlcoin
-                          heavy       use to mine Heavycoin
-                          jackpot     use to mine Jackpotcoin
-                          keccak      use to mine Maxcoin
-                          luffa       use to mine Doomcoin
-                          mjollnir    use to mine Mjollnircoin
-                          myr-gr      use to mine Myriad-Groestl
-                          neoscrypt   use to mine FeatherCoin
-                          nist5       use to mine TalkCoin
-                          penta       use to mine Joincoin / Pentablake
-                          quark       use to mine Quarkcoin
-                          qubit       use to mine Qubit Algo
-                          s3          use to mine 1coin
-                          skein       use to mine Skeincoin
-                          whirl       use to mine Whirlcoin
-                          x11         use to mine DarkCoin
-                          x14         use to mine X14Coin
-                          x15         use to mine Halcyon
-                          x17         use to mine X17
-						  vanilla     use to mine Vanillacoin
-                          lyra2v2     use to mine Vertcoin
-
-  -d, --devices         gives a comma separated list of CUDA device IDs
-                        to operate on. Device IDs start counting from 0!
-                        Alternatively give string names of your card like
-                        gtx780ti or gt640#2 (matching 2nd gt640 in the PC).
-
-  -i, --intensity       GPU threads per call 8-31 (default: 0=auto)
-                        Decimals are allowed for fine tuning
-  -f, --diff            Divide difficulty by this factor (std is 1)
-  -v, --vote            Heavycoin block vote (default: 512)
+   -a, --algo=ALGO specify the hash algorithm to use
+			bitcoin     Bitcoin
+			blake       Blake 256 (SFR/NEOS)
+			blakecoin   Fast Blake 256 (8 rounds)
+			c11         X11 variant
+			deep        Deepcoin
+			dmd-gr      Diamond-Groestl
+			fresh       Freshcoin (shavite 80)
+			fugue256    Fuguecoin
+			groestl     Groestlcoin
+			jackpot     Jackpot
+			keccak      Keccak-256 (Maxcoin)
+			luffa       Doomcoin
+			lyra2v2     VertCoin
+			myr-gr      Myriad-Groestl
+            neoscrypt   neoscrypt (FeatherCoin)
+			nist5       NIST5 (TalkCoin)
+			penta       Pentablake hash (5x Blake 512)
+			quark       Quark
+			qubit       Qubit
+			sia         Siacoin (at pools compatible to siamining.com) 
+			skein       Skein SHA2 (Skeincoin)
+			s3          S3 (1Coin)
+			spread      Spread
+			x11         X11 (DarkCoin)
+			x13         X13 (MaruCoin)
+			x14         X14
+			x15         X15
+			x17         X17 (peoplecurrency)
+			vanilla     Blake 256 8 rounds
+			yescrypt    yescrypt
+			whirl       Whirlcoin (old whirlpool)
+			whirlpoolx  Vanillacoin 
+  -d, --devices         Comma separated list of CUDA devices to use. 
+                        Device IDs start counting from 0! Alternatively takes
+                        string names of your cards like gtx780ti or gt640#2
+                        (matching 2nd gt640 in the PC)
+  -i  --intensity=N     GPU intensity 8-31 (default: auto) 
+                        Decimals are allowed for fine tuning 
+  -f, --diff-factor     Divide difficulty by this factor (default 1.0) 
+  -m, --diff-multiplier Multiply difficulty by this value (default 1.0) 
+  -v, --vote=VOTE       block reward vote (for HeavyCoin)
   -o, --url=URL         URL of mining server
   -O, --userpass=U:P    username:password pair for mining server
   -u, --user=USERNAME   username for mining server
   -p, --pass=PASSWORD   password for mining server
       --cert=FILE       certificate for mining server using SSL
   -x, --proxy=[PROTOCOL://]HOST[:PORT]  connect through a proxy
-  -t, --threads=N       number of miner threads (default: number of nVidia GPUs in your system)
-  -g                    number of mining threads per GPU (default: 1)
+  -t, --threads=N       number of miner threads (default: number of nVidia GPUs)
   -r, --retries=N       number of times to retry if a network call fails
                           (default: retry indefinitely)
-  -R, --retry-pause=N   time to pause between retries, in seconds (default: 15)
+  -R, --retry-pause=N   time to pause between retries, in seconds (default: 30)
   -T, --timeout=N       network timeout, in seconds (default: 270)
   -s, --scantime=N      upper bound on time spent scanning current work when
                         long polling is unavailable, in seconds (default: 5)
+  -n, --ndevs           list cuda devices
   -N, --statsavg        number of samples used to display hashrate (default: 30)
       --no-gbt          disable getblocktemplate support (height check in solo)
       --no-longpoll     disable X-Long-Polling support
       --no-stratum      disable X-Stratum support
+  -e                    disable extranonce
   -q, --quiet           disable per-thread hashmeter output
+      --no-color        disable colored output
   -D, --debug           enable debug output
   -P, --protocol-dump   verbose dump of protocol-level activities
+      --cpu-affinity    set process affinity to cpu core(s), mask 0x3 for cores 0 and 1
+      --cpu-priority    set process priority (default: 0 idle, 2 normal to 5 highest)
   -b, --api-bind        IP/Port for the miner API (default: 127.0.0.1:4068)
+  -S, --syslog          use system log for output messages
+      --syslog-prefix=... allow to change syslog tool name
+  -B, --background      run the miner in the background
       --benchmark       run in offline benchmark mode
       --cputest         debug hashes from cpu algorithms
-      --cpu-affinity    set process affinity to specific cpu core(s) mask
-      --cpu-priority    set process priority (default: 0 idle, 2 normal to 5 highest)
+      --no-cpu-verify   don't verify the found results
   -c, --config=FILE     load a JSON-format configuration file
-      --no-color        disable colored console output
+      --plimit=N        Set the gpu power limit to N Watt (driver version >=352.21)
+                        (needs adminitrator rights under Windows)
   -V, --version         display version information and exit
-  -h, --help            display this help text and exit
+  -h, --help            display this help text and exit\n"
 
 
 >>> Examples <<<
@@ -211,6 +218,27 @@ features.
 2016-06-11 v7.03: faster lyra2v2
 2016-06-18 v7.04: Neoscrypt optimization
                   Bug Fixes 
+2016-08-11 v8.00: added Siacoin
+2016-08-12 v8.01: increse default intensity for Sia
+                  fix Linux build
+2016-09-29 v8.02: change to CUDA 8.0 on Windows
+                  various small changes
+2016-12-08 v8.03: fix memory leak in Neoscrypt
+2016-12-13 v8.04: fix illegal memory access in X11-X17
+                  fix duplicate shares in skein
+2016-12-17 v8.05: fix Skein bug
+2017-03-12 v8.06: Heavy and Mjollnir algos removed
+2017-05-18 v8.07: Bitcredit algo removed
+                  fixed bugs in bitcoin and jackpot algo
+2017-05-19 v8.08: fix Makefile and configure.ac for Linux
+2017-06-07 v8.09: some minor bug fixes
+2017-07-17 v8.10: fix Orbitcoin solo mining (Neoscrypt)
+2017-07-25 v8.11: change some timeout values
+                  fix Feathercoin solo mining (Neoscrypt)
+				  show chance to find a block while solo mining
+2017-08-17 v8.12: fix Myriad-Groestl speed bug
+2017-08-26 v8.13: fix retry bug
+                  faster neoscrypt for 1080/1080Ti
 
 >>> AUTHORS <<<
 

@@ -7,7 +7,6 @@
 #endif
 #include <openssl/sha.h>
 
-#include "uint256.h"
 #include "sph/sph_groestl.h"
 #include "cuda_groestlcoin.h"
 
@@ -27,12 +26,10 @@ do {                                                                  \
 		}                                                                 \
 } while (0)
 
-#define SWAP32(x) \
-    ((((x) << 24) & 0xff000000u) | (((x) << 8) & 0x00ff0000u)   | \
-      (((x) >> 8) & 0x0000ff00u) | (((x) >> 24) & 0x000000ffu))
+#define SWAP32(x) swab32(x)
 
 // CPU-groestl
-extern "C" void groestlhash(void *state, const void *input)
+void groestlhash(void *state, const void *input)
 {
     sph_groestl512_context ctx_groestl;
 
@@ -76,6 +73,7 @@ extern int scanhash_groestlcoin(int thr_id, uint32_t *pdata, uint32_t *ptarget,
 
 		groestlcoin_cpu_init(thr_id, throughputmax);
 		CUDA_SAFE_CALL(cudaMallocHost(&foundNounce, 2 * 4));
+		mining_has_stopped[thr_id] = false;
 		init = true;
     }
 

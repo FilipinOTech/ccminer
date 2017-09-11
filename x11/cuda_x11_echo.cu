@@ -5,11 +5,11 @@
 #include "cuda_vector.h"
 
 
-#ifdef NOASM
+// #ifdef NOASM
 #include "cuda_x11_aes_noasm.cu"
-#else
-#include "cuda_x11_aes.cu"
-#endif
+// #else
+// #include "cuda_x11_aes.cu"
+// #endif
 
 static uint32_t *d_found[MAX_GPUS];
 
@@ -389,7 +389,7 @@ void x11_echo512_gpu_hash_64(uint32_t threads, uint32_t startNounce, uint32_t *c
 	__shared__ __align__(128) uint32_t sharedMemory[1024];
 
 	echo_gpu_init(sharedMemory);
-
+	__syncthreads();
 	const uint32_t thread = (blockDim.x * blockIdx.x + threadIdx.x);
 //    if (thread < threads)
     {
@@ -432,7 +432,7 @@ void x11_echo512_gpu_hash_64_final(uint32_t threads, uint32_t startNounce, const
 
 		__shared__ __align__(128) uint32_t sharedMemory[1024];
 		echo_gpu_init(sharedMemory);
-
+		__syncthreads();
 		const uint32_t nounce = (startNounce + thread);
 
 		const uint32_t hashPosition = nounce - startNounce;

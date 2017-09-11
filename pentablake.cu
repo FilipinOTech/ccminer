@@ -22,7 +22,7 @@ extern "C" {
 #define TPB 192
 
 /* hash by cpu with blake 256 */
-extern "C" void pentablakehash(void *output, const void *input)
+void pentablakehash(void *output, const void *input)
 {
 	unsigned char hash[128];
 	#define hashB hash + 64
@@ -108,7 +108,7 @@ const uint64_t c_u512[16] =
 
 #define G(a,b,c,d,x) { \
 	uint32_t idx1 = c_sigma[i][x]; \
-	uint32_t idx2 = c_sigma[i][x+1]; \
+	uint32_t idx2 = c_sigma[i][x + 1]; \
 	v[a] += (m[idx1] ^ c_u512[idx2]) + v[b]; \
 	v[d] = SWAPDWORDS(v[d] ^ v[a]); \
 	v[c] += v[d]; \
@@ -470,6 +470,7 @@ extern int scanhash_pentablake(int thr_id, uint32_t *pdata, uint32_t *ptarget,
 		CUDA_SAFE_CALL(cudaMalloc(&d_hash, 64 * throughputmax));
 		CUDA_SAFE_CALL(cudaMallocHost(&h_resNounce[thr_id], 2*sizeof(uint32_t)));
 		CUDA_SAFE_CALL(cudaMalloc(&d_resNounce[thr_id], 2*sizeof(uint32_t)));
+		mining_has_stopped[thr_id] = false;
 
 		init[thr_id] = true;
 	}

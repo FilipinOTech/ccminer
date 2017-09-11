@@ -47,7 +47,7 @@ extern uint32_t cuda_check_hash_branch(int thr_id, uint32_t threads, uint32_t st
 extern void cuda_check_quarkcoin(int thr_id, uint32_t threads, uint32_t startNounce, uint32_t *d_nonceVector, uint32_t *d_inputHash, uint32_t *foundnonces);
 
 // Original Quarkhash Funktion aus einem miner Quelltext
-extern "C" void quarkhash(void *state, const void *input)
+void quarkhash(void *state, const void *input)
 {
     sph_blake512_context ctx_blake;
     sph_bmw512_context ctx_bmw;
@@ -181,6 +181,7 @@ extern int scanhash_quark(int thr_id, uint32_t *pdata,
 		quark_keccak512_cpu_init(thr_id);
 		quark_jh512_cpu_init(thr_id);
 		CUDA_SAFE_CALL(cudaGetLastError());
+		mining_has_stopped[thr_id] = false;
 		init = true;
 	}
 

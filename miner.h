@@ -1,7 +1,12 @@
 #ifndef __MINER_H__
 #define __MINER_H__
 
-#include "cpuminer-config.h"
+#ifndef WIN32
+#include "ccminer-config.h"
+#else
+#include "ccminer-config-win.h"
+#endif
+
 #ifndef __cplusplus
 #include <stdbool.h>
 #endif
@@ -256,37 +261,18 @@ extern "C" {
 	void sha256_transform(uint32_t *state, const uint32_t *block, int swap);
 	void sha256d(unsigned char *hash, const unsigned char *data, int len);
 
-#if defined(__ARM_NEON__) || defined(__i386__) || defined(__x86_64__)
-#define HAVE_SHA256_4WAY 0
-	int sha256_use_4way();
-	void sha256_init_4way(uint32_t *state);
-	void sha256_transform_4way(uint32_t *state, const uint32_t *block, int swap);
-#endif
-
-#if defined(__x86_64__) && defined(USE_AVX2)
-#define HAVE_SHA256_8WAY 0
-	int sha256_use_8way();
-	void sha256_init_8way(uint32_t *state);
-	void sha256_transform_8way(uint32_t *state, const uint32_t *block, int swap);
-#endif
-
-	extern int scanhash_sha256d(int thr_id, uint32_t *pdata,
-								uint32_t *ptarget, uint32_t max_nonce, uint32_t *hashes_done);
-
-	struct work_restart
-	{
-		volatile unsigned long	restart;
-		char			padding[128 - sizeof(unsigned long)];
-	};
-	extern struct work_restart *work_restart;
-
-	extern bool fulltest(const uint32_t *hash, const uint32_t *target);
-
 #ifdef __cplusplus
 }
 #endif
 
-extern unsigned char *scrypt_buffer_alloc();
+struct work_restart
+{
+	volatile unsigned long	restart;
+	char			padding[128 - sizeof(unsigned long)];
+};
+extern struct work_restart *work_restart;
+
+bool fulltest(const uint32_t *hash, const uint32_t *target);
 
 extern int scanhash_deep(int thr_id, uint32_t *pdata,
 	uint32_t *ptarget, uint32_t max_nonce,
@@ -303,10 +289,6 @@ extern int scanhash_fugue256(int thr_id, uint32_t *pdata,
 extern int scanhash_groestlcoin(int thr_id, uint32_t *pdata,
 	uint32_t *ptarget, uint32_t max_nonce,
 	uint32_t *hashes_done);
-
-extern int scanhash_heavy(int thr_id, uint32_t *pdata,
-	uint32_t *ptarget, uint32_t max_nonce,
-	uint32_t *hashes_done, uint32_t maxvote, int blocklen);
 
 extern int scanhash_c11(int thr_id, uint32_t *pdata,
 						uint32_t *ptarget, uint32_t max_nonce,
@@ -398,13 +380,6 @@ extern int scanhash_neoscrypt(bool stratum, int thr_id, uint32_t *pdata,
 	uint32_t *ptarget, uint32_t max_nonce,
 	uint32_t *hashes_done);
 
-extern int scanhash_yescrypt(int thr_id, uint32_t *pdata,
-	const uint32_t *ptarget, uint32_t max_nonce,
-	uint32_t *hashes_done);
-
-extern int scanhash_bitcredit(int thr_id, uint32_t *pdata,
-							  uint32_t *ptarget, const uint32_t *midstate, uint32_t max_nonce,
-							  uint32_t *hashes_done);
 extern int scanhash_sia(int thr_id, uint32_t *pdata,
 												uint32_t *ptarget, uint32_t max_nonce,
 												uint32_t *hashes_done);
@@ -514,7 +489,6 @@ extern int longpoll_thr_id;
 extern int stratum_thr_id;
 extern int api_thr_id;
 extern bool opt_trust_pool;
-extern uint16_t opt_vote;
 
 extern uint64_t global_hashrate;
 extern double   global_diff;
@@ -556,18 +530,16 @@ extern uint32_t gpus_intensity[MAX_GPUS];
 
 #define CL_WHT  "\x1B[01;37m" /* white */
 
-extern void format_hashrate(double hashrate, char *output);
-extern void applog(int prio, const char *fmt, ...);
-extern json_t *json_rpc_call(CURL *curl, const char *url, const char *userpass,
-	const char *rpc_req, bool, bool, int *);
-extern void cbin2hex(char *out, const char *in, size_t len);
-extern char *bin2hex(const unsigned char *in, size_t len);
-extern bool hex2bin(unsigned char *p, const char *hexstr, size_t len);
-extern int timeval_subtract(struct timeval *result, struct timeval *x,
-	struct timeval *y);
-extern void diff_to_target(uint32_t *target, double diff);
-extern void get_currentalgo(char* buf, int sz);
-extern uint32_t device_intensity(int thr_id, const char *func, uint32_t defcount);
+void format_hashrate(double hashrate, char *output);
+void applog(int prio, const char *fmt, ...);
+json_t *json_rpc_call(CURL *curl, const char *url, const char *userpass, const char *rpc_req, bool, bool, int *);
+void cbin2hex(char *out, const char *in, size_t len);
+char *bin2hex(const unsigned char *in, size_t len);
+bool hex2bin(unsigned char *p, const char *hexstr, size_t len);
+int timeval_subtract(struct timeval *result, struct timeval *x, struct timeval *y);
+void diff_to_target(uint32_t *target, double diff);
+void get_currentalgo(char* buf, int sz);
+uint32_t device_intensity(int thr_id, const char *func, uint32_t defcount);
 
 struct stratum_job {
 	char *job_id;
@@ -591,7 +563,6 @@ struct stratum_ctx {
 
 	CURL *curl;
 	char *curl_url;
-	char curl_err_str[CURL_ERROR_SIZE];
 	curl_socket_t sock;
 	size_t sockbuf_size;
 	char *sockbuf;
@@ -616,9 +587,9 @@ struct stratum_ctx {
 
 struct work {
 	uint32_t data[64];
+	size_t datasize;
 	uint32_t midstate[8];
 	uint32_t target[8];
-	uint32_t maxvote;
 
 	char job_id[128];
 	size_t xnonce2_len;
@@ -634,6 +605,42 @@ struct work {
 
 	uint32_t scanned_from;
 	uint32_t scanned_to;
+};
+
+enum sha_algos
+{
+	ALGO_BITCOIN,
+	ALGO_BLAKE,
+	ALGO_BLAKECOIN,
+	ALGO_C11,
+	ALGO_DEEP,
+	ALGO_DMD_GR,
+	ALGO_DOOM,
+	ALGO_FRESH,
+	ALGO_FUGUE256,		/* Fugue256 */
+	ALGO_GROESTL,
+	ALGO_KECCAK,
+	ALGO_JACKPOT,
+	ALGO_LUFFA_DOOM,
+	ALGO_LYRA2v2,
+	ALGO_MYR_GR,
+	ALGO_NIST5,
+	ALGO_PENTABLAKE,
+	ALGO_QUARK,
+	ALGO_QUBIT,
+	ALGO_SIA,
+	ALGO_SKEIN,
+	ALGO_S3,
+	ALGO_SPREADX11,
+	ALGO_WHC,
+	ALGO_WHCX,
+	ALGO_X11,
+	ALGO_X13,
+	ALGO_X14,
+	ALGO_X15,
+	ALGO_X17,
+	ALGO_VANILLA,
+	ALGO_NEO
 };
 
 bool stratum_socket_full(struct stratum_ctx *sctx, int timeout);
@@ -683,16 +690,12 @@ void applog_hash(unsigned char *hash);
 void applog_compare_hash(unsigned char *hash, unsigned char *hash2);
 
 void print_hash_tests(void);
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 void blake256hash(void *output, const void *input, int8_t rounds);
 void deephash(void *state, const void *input);
 void doomhash(void *state, const void *input);
 void fresh_hash(void *state, const void *input);
 void fugue256_hash(unsigned char* output, const unsigned char* input, int len);
-void heavycoin_hash(unsigned char* output, const unsigned char* input, int len);
 void keccak256_hash(void *state, const void *input);
 unsigned int jackpothash(void *state, const void *input);
 void groestlhash(void *state, const void *input);
@@ -709,9 +712,5 @@ void x13hash(void *output, const void *input);
 void x14hash(void *output, const void *input);
 void x15hash(void *output, const void *input);
 void x17hash(void *output, const void *input);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* __MINER_H__ */

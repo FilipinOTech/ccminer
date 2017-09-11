@@ -6,7 +6,6 @@
 #endif
 #include <openssl/sha.h>
 
-#include "uint256.h"
 #include "sph/sph_groestl.h"
 
 #include "miner.h"
@@ -18,11 +17,7 @@ void myriadgroestl_cpu_init(int thr_id, uint32_t threads);
 void myriadgroestl_cpu_setBlock(int thr_id, void *data, void *pTargetIn);
 void myriadgroestl_cpu_hash(int thr_id, uint32_t threads, uint32_t startNounce, uint32_t *nounce);
 
-#define SWAP32(x) \
-    ((((x) << 24) & 0xff000000u) | (((x) << 8) & 0x00ff0000u)   | \
-      (((x) >> 8) & 0x0000ff00u) | (((x) >> 24) & 0x000000ffu))
-
-extern "C" void myriadhash(void *state, const void *input)
+void myriadhash(void *state, const void *input)
 {
 	uint32_t hashA[16], hashB[16];
 	sph_groestl512_context ctx_groestl;
@@ -69,6 +64,7 @@ extern int scanhash_myriad(int thr_id, uint32_t *pdata, uint32_t *ptarget,
 		myriadgroestl_cpu_init(thr_id, throughputmax);
 #endif
 		cudaMallocHost(&h_found, 4 * sizeof(uint32_t));
+		mining_has_stopped[thr_id] = false;
 		init = true;
 	}
 

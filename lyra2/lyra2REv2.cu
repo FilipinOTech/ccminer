@@ -107,9 +107,9 @@ int scanhash_lyra2v2(int thr_id, uint32_t *pdata,
 	}
 	else if (strstr(props.name, "980"))
 	{
-		intensity = 256 * 256 * 22;
-#ifdef _WIN64
 		intensity = 256 * 256 * 15;
+#ifdef _WIN64
+		intensity = 256 * 256 * 22;
 #endif
 	}
 	else if (strstr(props.name, "750 Ti"))
@@ -125,7 +125,7 @@ int scanhash_lyra2v2(int thr_id, uint32_t *pdata,
 		intensity = 256 * 256 * 8;
 	}
 	uint32_t throughputmax = device_intensity(device_map[thr_id], __func__, intensity);
-	uint32_t throughput = min(throughputmax, max_nonce - first_nonce) & 0xffffff00;
+	uint32_t throughput = min(throughputmax, max_nonce - first_nonce) & 0xfffffe00;
 
 	if (opt_benchmark)
 		((uint32_t*)ptarget)[7] = 0x004f;
@@ -152,6 +152,7 @@ int scanhash_lyra2v2(int thr_id, uint32_t *pdata,
 
 		bmw256_cpu_init(thr_id);
 		lyra2v2_cpu_init(thr_id, d_hash2);
+		mining_has_stopped[thr_id] = false;
 
 		init = true; 
 	}

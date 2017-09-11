@@ -23,7 +23,7 @@ extern "C" {
 extern "C" int blake256_rounds = 14;
 
 /* hash by cpu with blake 256 */
-extern "C" void blake256hash(void *output, const void *input, int8_t rounds = 14)
+void blake256hash(void *output, const void *input, int8_t rounds = 14)
 {
 	uchar hash[64];
 	sph_blake256_context ctx;
@@ -724,6 +724,7 @@ extern int scanhash_blake256(int thr_id, uint32_t *pdata, uint32_t *ptarget,
 		CUDA_SAFE_CALL(cudaMallocHost(&h_data, 15 * sizeof(uint32_t)));
 		CUDA_SAFE_CALL(cudaMallocHost(&h_resNonce, NBN * sizeof(uint32_t)));
 		CUDA_SAFE_CALL(cudaMalloc(&d_resNonce[thr_id], NBN * sizeof(uint32_t)));
+		mining_has_stopped[thr_id] = false;
 		init = true;
 	}
 

@@ -19,7 +19,7 @@ extern void keccak256_setBlock_80(int thr_id, void *pdata,const void *ptarget);
 extern void keccak256_cpu_hash_80(int thr_id, uint32_t threads, uint32_t startNounce, uint32_t *h_nounce);
 
 // CPU Hash
-extern "C" void keccak256_hash(void *state, const void *input)
+void keccak256_hash(void *state, const void *input)
 {
 	sph_keccak_context ctx_keccak;
 
@@ -57,6 +57,7 @@ extern int scanhash_keccak256(int thr_id, uint32_t *pdata,
 		CUDA_SAFE_CALL(cudaMallocHost(&h_nounce, 2 * sizeof(uint32_t)));
 		keccak256_cpu_init(thr_id, (int)throughputmax);
 //		CUDA_SAFE_CALL(cudaMallocHost(&h_nounce, 2 * sizeof(uint32_t)));
+		mining_has_stopped[thr_id] = false;
 		init = true;
 	}
 

@@ -9,9 +9,6 @@
 * any later version.  See COPYING for more details.
 */
 
-//#define _GNU_SOURCE
-#include "cpuminer-config.h"
-
 #include <cstdio>
 #include <cstdlib>
 #include <ctype.h>
@@ -36,45 +33,8 @@
 #include "elist.h"
 using namespace std;
 
-enum sha_algos
-{
-	ALGO_BITC,
-	ALGO_BITCOIN,
-	ALGO_BLAKE,
-	ALGO_BLAKECOIN,
-	ALGO_C11,
-	ALGO_DEEP,
-	ALGO_DMD_GR,
-	ALGO_DOOM,
-	ALGO_FRESH,
-	ALGO_FUGUE256,		/* Fugue256 */
-	ALGO_GROESTL,
-	ALGO_HEAVY,		/* Heavycoin hash */
-	ALGO_KECCAK,
-	ALGO_JACKPOT,
-	ALGO_LUFFA_DOOM,
-	ALGO_LYRA2v2,
-	ALGO_MJOLLNIR,		/* Hefty hash */
-	ALGO_MYR_GR,
-	ALGO_NIST5,
-	ALGO_PENTABLAKE,
-	ALGO_QUARK,
-	ALGO_QUBIT,
-	ALGO_SIA,
-	ALGO_SKEIN,
-	ALGO_S3,
-	ALGO_SPREADX11,
-	ALGO_WHC,
-	ALGO_WHCX,
-	ALGO_X11,
-	ALGO_X13,
-	ALGO_X14,
-	ALGO_X15,
-	ALGO_X17,
-	ALGO_VANILLA,
-	ALGO_NEO
-};
 extern enum sha_algos opt_algo;
+extern char curl_err_str[];
 
 bool opt_tracegpu = false;
 
@@ -271,8 +231,11 @@ static size_t all_data_cb(const void *ptr, size_t size, size_t nmemb,
 	newlen = oldlen + len;
 
 	newmem = realloc(db->buf, newlen + 1);
-	if(!newmem)
-		return 0;
+	if(newmem == NULL)
+	{
+		applog(LOG_ERR, "Out of memory!");
+		proper_exit(2);
+	}
 
 	db->buf = newmem;
 	db->len = newlen;
@@ -332,9 +295,17 @@ static size_t resp_hdr_cb(void *ptr, size_t size, size_t nmemb, void *user_data)
 	void *tmp;
 
 	val = (char*)calloc(1, ptrlen);
+	if(val == NULL)
+	{
+		applog(LOG_ERR, "Out of memory!");
+		proper_exit(2);
+	}
 	key = (char*)calloc(1, ptrlen);
-	if(!key || !val)
-		goto out;
+	if(key == NULL)
+	{
+		applog(LOG_ERR, "Out of memory!");
+		proper_exit(2);
+	}
 
 	tmp = memchr(ptr, ':', ptrlen);
 	if(!tmp || (tmp == ptr))	/* skip empty keys / blanks */
@@ -442,15 +413,14 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 					  bool longpoll_scan, bool longpoll, int *curl_err)
 {
 	json_t *val, *err_val, *res_val;
-	int rc;
+	CURLcode rc;
 	struct data_buffer all_data = { 0 };
 	struct upload_buffer upload_data;
 	json_error_t err;
 	struct curl_slist *headers = NULL;
 	char* httpdata;
 	char len_hdr[64], hashrate_hdr[64];
-	char curl_err_str[CURL_ERROR_SIZE] = { 0 };
-	long timeout = longpoll ? opt_timeout : 30;
+	long timeout = opt_timeout;
 	struct header_info hi = { 0 };
 	bool lp_scanning = longpoll_scan && !have_longpoll;
 
@@ -512,15 +482,18 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	headers = curl_slist_append(headers, "Expect:"); /* disable Expect hdr*/
 
 	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-
+	curl_err_str[0] = 0;
 	rc = curl_easy_perform(curl);
 	if(curl_err != NULL)
 		*curl_err = rc;
-	if(rc)
+	if(rc != CURLE_OK)
 	{
 		if(!(longpoll && rc == CURLE_OPERATION_TIMEDOUT))
 		{
-			applog(LOG_ERR, "HTTP request failed: %s", curl_err_str);
+			if(strlen(curl_err_str)>0)
+				applog(LOG_ERR, "HTTP request failed: %s", curl_err_str);
+			else
+				applog(LOG_ERR, "HTTP request failed: %s", curl_easy_strerror(rc));
 			goto err_out;
 		}
 	}
@@ -646,10 +619,20 @@ void *aligned_calloc(int size)
 	const int ALIGN = 64; // cache line
 #ifdef _MSC_VER
 	void* res = _aligned_malloc(size, ALIGN);
+	if(res == NULL)
+	{
+		applog(LOG_ERR, "Out of memory!");
+		proper_exit(2);
+	}
 	memset(res, 0, size);
 	return res;
 #else
 	void *mem = calloc(1, size + ALIGN + sizeof(uintptr_t));
+	if(mem == NULL)
+	{
+		applog(LOG_ERR, "Out of memory!");
+		proper_exit(2);
+	}
 	void **ptr = (void**)((size_t)(((uintptr_t)(mem)) + ALIGN + sizeof(uintptr_t)) & ~(ALIGN - 1));
 	ptr[-1] = mem;
 	return ptr;
@@ -678,8 +661,11 @@ void cbin2hex(char *out, const char *in, size_t len)
 char *bin2hex(const uchar *in, size_t len)
 {
 	char *s = (char*)malloc((len * 2) + 1);
-	if(!s)
-		return NULL;
+	if(s == NULL)
+	{
+		applog(LOG_ERR, "Out of memory!");
+		proper_exit(2);
+	}
 
 	cbin2hex(s, (const char *)in, len);
 
@@ -742,7 +728,7 @@ struct timeval *y)
 	return (start > end);
 }
 
-extern "C" bool fulltest(const uint32_t *hash, const uint32_t *target)
+bool fulltest(const uint32_t *hash, const uint32_t *target)
 {
 	int i;
 	bool rc = true;
@@ -788,6 +774,27 @@ extern "C" bool fulltest(const uint32_t *hash, const uint32_t *target)
 		free(target_str);
 	}
 
+	return rc;
+}
+
+bool fulltest_sia(const uint64_t *hash, const uint64_t *target)
+{
+	int i;
+	bool rc = true;
+
+	for(i = 0; i < 4; i--)
+	{
+		if(swab64(hash[i]) > target[3 - i])
+		{
+			rc = false;
+			break;
+		}
+		if(swab64(hash[i]) < target[3 - i])
+		{
+			rc = true;
+			break;
+		}
+	}
 	return rc;
 }
 
@@ -892,6 +899,11 @@ static void stratum_buffer_append(struct stratum_ctx *sctx, const char *s)
 	{
 		sctx->sockbuf_size = snew + (RBUFSIZE - (snew % RBUFSIZE));
 		sctx->sockbuf = (char*)realloc(sctx->sockbuf, sctx->sockbuf_size);
+		if(sctx->sockbuf == NULL)
+		{
+			applog(LOG_ERR, "Out of memory!");
+			proper_exit(2);
+		}
 	}
 	strcpy(sctx->sockbuf + old, s);
 }
@@ -900,12 +912,16 @@ char *stratum_recv_line(struct stratum_ctx *sctx)
 {
 	ssize_t len, buflen;
 	char *tok, *sret = NULL;
+	int timeout = opt_timeout;
+
+	if(!sctx->sockbuf)
+		return NULL;
 
 	if(!strstr(sctx->sockbuf, "\n"))
 	{
 		bool ret = true;
 		time_t rstart = time(NULL);
-		if(!socket_full(sctx->sock, 60))
+		if(!socket_full(sctx->sock, timeout))
 		{
 			applog(LOG_ERR, "stratum_recv_line timed out");
 			goto out;
@@ -924,7 +940,7 @@ char *stratum_recv_line(struct stratum_ctx *sctx)
 			}
 			if(n < 0)
 			{
-				if(!socket_blocks() || !socket_full(sctx->sock, 1))
+				if(!socket_blocks() || !socket_full(sctx->sock, 10))
 				{
 					ret = false;
 					break;
@@ -932,11 +948,11 @@ char *stratum_recv_line(struct stratum_ctx *sctx)
 			}
 			else
 				stratum_buffer_append(sctx, s);
-		} while(time(NULL) - rstart < 60 && !strstr(sctx->sockbuf, "\n"));
+		} while(time(NULL) - rstart < timeout && !strstr(sctx->sockbuf, "\n"));
 
 		if(!ret)
 		{
-			applog(LOG_ERR, "stratum_recv_line failed");
+			if(opt_debug) applog(LOG_ERR, "stratum_recv_line failed");
 			goto out;
 		}
 	}
@@ -975,7 +991,7 @@ struct curl_sockaddr *addr)
 bool stratum_connect(struct stratum_ctx *sctx, const char *url)
 {
 	CURL *curl;
-	int rc;
+	CURLcode rc;
 
 	pthread_mutex_lock(&sctx->sock_lock);
 	if(sctx->curl)
@@ -991,6 +1007,11 @@ bool stratum_connect(struct stratum_ctx *sctx, const char *url)
 	if(!sctx->sockbuf)
 	{
 		sctx->sockbuf = (char*)calloc(RBUFSIZE, 1);
+		if(sctx->sockbuf == NULL)
+		{
+			applog(LOG_ERR, "Out of memory!");
+			proper_exit(2);
+		}
 		sctx->sockbuf_size = RBUFSIZE;
 	}
 	sctx->sockbuf[0] = '\0';
@@ -1003,14 +1024,19 @@ bool stratum_connect(struct stratum_ctx *sctx, const char *url)
 	}
 	free(sctx->curl_url);
 	sctx->curl_url = (char*)malloc(strlen(url));
+	if(sctx->curl_url == NULL)
+	{
+		applog(LOG_ERR, "Out of memory!");
+		proper_exit(2);
+	}
 	sprintf(sctx->curl_url, "http%s", strstr(url, "://"));
 
 	if(opt_protocol)
 		curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
 	curl_easy_setopt(curl, CURLOPT_URL, sctx->curl_url);
 	curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
-	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 30);
-	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, sctx->curl_err_str);
+	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, opt_timeout);
+	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curl_err_str);
 	curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
 	curl_easy_setopt(curl, CURLOPT_TCP_NODELAY, 1);
 	if(opt_proxy && opt_proxy_type != CURLPROXY_HTTP)
@@ -1035,11 +1061,14 @@ bool stratum_connect(struct stratum_ctx *sctx, const char *url)
 	curl_easy_setopt(curl, CURLOPT_OPENSOCKETDATA, &sctx->sock);
 #endif
 	curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 1);
-
+	curl_err_str[0] = 0;
 	rc = curl_easy_perform(curl);
-	if(rc)
+	if(rc != CURLE_OK)
 	{
-		applog(LOG_ERR, "Stratum connection failed: %s", sctx->curl_err_str);
+		if(strlen(curl_err_str)>0)
+			applog(LOG_ERR, "HTTP request failed: %s", curl_err_str);
+		else
+			applog(LOG_ERR, "HTTP request failed: %s", curl_easy_strerror(rc));
 		curl_easy_cleanup(curl);
 		sctx->curl = NULL;
 		return false;
@@ -1053,6 +1082,28 @@ bool stratum_connect(struct stratum_ctx *sctx, const char *url)
 	return true;
 }
 
+static void stratum_free_job(struct stratum_ctx *sctx)
+{
+	pthread_mutex_lock(&sctx->sock_lock);
+	if(sctx->job.job_id)
+	{
+		free(sctx->job.job_id);
+	}
+	if(sctx->job.merkle_count)
+	{
+		for(int i = 0; i < sctx->job.merkle_count; i++)
+		{
+			free(sctx->job.merkle[i]);
+			sctx->job.merkle[i] = NULL;
+		}
+		free(sctx->job.merkle);
+	}
+	free(sctx->job.coinbase);
+	// note: xnonce2 is not allocated
+	memset(&(sctx->job.job_id), 0, sizeof(struct stratum_job));
+	pthread_mutex_unlock(&sctx->sock_lock);
+}
+
 void stratum_disconnect(struct stratum_ctx *sctx)
 {
 	pthread_mutex_lock(&sctx->sock_lock);
@@ -1063,10 +1114,14 @@ void stratum_disconnect(struct stratum_ctx *sctx)
 		sctx->curl = NULL;
 		sctx->sockbuf[0] = '\0';
 	}
+	if(sctx->job.job_id)
+	{
+		stratum_free_job(sctx);
+	}
 	pthread_mutex_unlock(&sctx->sock_lock);
 }
 
-static const char *get_stratum_session_id(json_t *val)
+static const char *get_stratum_session_id(const json_t *val)
 {
 	json_t *arr_val;
 	int i, n;
@@ -1090,7 +1145,7 @@ static const char *get_stratum_session_id(json_t *val)
 	return NULL;
 }
 
-static bool stratum_parse_extranonce(struct stratum_ctx *sctx, json_t *params, int pndx)
+static bool stratum_parse_extranonce(struct stratum_ctx *sctx, const json_t *params, int pndx)
 {
 	const char* xnonce1;
 	int xn2_size;
@@ -1118,11 +1173,10 @@ static bool stratum_parse_extranonce(struct stratum_ctx *sctx, json_t *params, i
 		free(sctx->xnonce1);
 	sctx->xnonce1_size = strlen(xnonce1) / 2;
 	sctx->xnonce1 = (uchar*)calloc(1, sctx->xnonce1_size);
-	if(unlikely(!sctx->xnonce1))
+	if(sctx->xnonce1 == NULL)
 	{
-		applog(LOG_ERR, "Failed to alloc xnonce1");
-		pthread_mutex_unlock(&sctx->work_lock);
-		goto out;
+		applog(LOG_ERR, "Out of memory!");
+		proper_exit(2);
 	}
 	hex2bin(sctx->xnonce1, xnonce1, sctx->xnonce1_size);
 	sctx->xnonce2_size = xn2_size;
@@ -1139,14 +1193,21 @@ out:
 
 bool stratum_subscribe(struct stratum_ctx *sctx)
 {
-	char *s, *sret = NULL;
-	const char *sid;
-	json_t *val = NULL, *res_val, *err_val;
 	json_error_t err;
+	json_t *val;
+	json_t *res_val;
+	json_t *err_val;
 	bool ret = false, retry = false;
+	char *sret;
+	char *sid;
 
 start:
-	s = (char*)malloc(128 + (sctx->session_id ? strlen(sctx->session_id) : 0));
+	char *s = (char*)malloc(128 + (sctx->session_id ? strlen(sctx->session_id) : 0));
+	if(s == NULL)
+	{
+		applog(LOG_ERR, "Out of memory!");
+		proper_exit(2);
+	}
 	if(retry)
 		sprintf(s, "{\"id\": 1, \"method\": \"mining.subscribe\", \"params\": []}");
 	else if(sctx->session_id)
@@ -1183,8 +1244,7 @@ start:
 	res_val = json_object_get(val, "result");
 	err_val = json_object_get(val, "error");
 
-	if(!res_val || json_is_null(res_val) ||
-	   (err_val && !json_is_null(err_val)))
+	if(!res_val || json_is_null(res_val) || (err_val && !json_is_null(err_val)))
 	{
 		if(opt_debug || retry)
 		{
@@ -1207,7 +1267,7 @@ start:
 	ret = true;
 
 	// session id (optional)
-	sid = get_stratum_session_id(res_val);
+	sid = (char*)get_stratum_session_id(res_val);
 	if(opt_debug && sid)
 		applog(LOG_DEBUG, "Stratum session id: %s", sid);
 
@@ -1223,13 +1283,10 @@ out:
 	if(val)
 		json_decref(val);
 
-	if(!ret)
+	if(!ret && sret && !retry)
 	{
-		if(sret && !retry)
-		{
-			retry = true;
-			goto start;
-		}
+		retry = true;
+		goto start;
 	}
 
 	return ret;
@@ -1243,11 +1300,19 @@ bool stratum_authorize(struct stratum_ctx *sctx, const char *user, const char *p
 	bool ret = false;
 
 	s = (char*)malloc(80 + strlen(user) + strlen(pass));
+	if(s == NULL)
+	{
+		applog(LOG_ERR, "Out of memory!");
+		proper_exit(2);
+	}
 	sprintf(s, "{\"id\": 2, \"method\": \"mining.authorize\", \"params\": [\"%s\", \"%s\"]}",
 			user, pass);
 
 	if(!stratum_send_line(sctx, s))
+	{
+		applog(LOG_ERR, "Error: couldn't send stratum authorization request");
 		goto out;
+	}
 
 	while(1)
 	{
@@ -1287,7 +1352,7 @@ bool stratum_authorize(struct stratum_ctx *sctx, const char *user, const char *p
 		if(!stratum_send_line(sctx, s))
 			goto out;
 		// reduced timeout to handle pools ignoring this method without answer (like xpool.ca)
-		if(!socket_full(sctx->sock, 1))
+		if(!socket_full(sctx->sock, 10))
 		{
 			if(opt_debug)
 				applog(LOG_DEBUG, "stratum extranonce subscribe timed out");
@@ -1420,6 +1485,8 @@ static bool stratum_notify(struct stratum_ctx *sctx, json_t *params)
 	else
 		ntime = ntime - (uint32_t)time(0);
 
+	pthread_mutex_lock(&sctx->work_lock);
+
 	if(ntime > sctx->srvtime_diff)
 	{
 		sctx->srvtime_diff = ntime;
@@ -1427,8 +1494,15 @@ static bool stratum_notify(struct stratum_ctx *sctx, json_t *params)
 			applog(LOG_DEBUG, "stratum time is at least %ds in the future", ntime);
 	}
 
-	if (merkle_count)
-		merkle = (uchar**) malloc(merkle_count * sizeof(char *));
+	if(merkle_count)
+	{
+		merkle = (uchar**)malloc(merkle_count * sizeof(char *));
+		if(merkle == NULL)
+		{
+			applog(LOG_ERR, "Out of memory!");
+			proper_exit(2);
+		}
+	}
 	for(i = 0; i < merkle_count; i++)
 	{
 		const char *s = json_string_value(json_array_get(merkle_arr, i));
@@ -1438,13 +1512,17 @@ static bool stratum_notify(struct stratum_ctx *sctx, json_t *params)
 				free(merkle[i]);
 			free(merkle);
 			applog(LOG_ERR, "Stratum notify: invalid Merkle branch");
+			pthread_mutex_unlock(&sctx->work_lock);
 			goto out;
 		}
 		merkle[i] = (uchar*)malloc(32);
+		if(merkle[i] == NULL)
+		{
+			applog(LOG_ERR, "Out of memory!");
+			proper_exit(2);
+		}
 		hex2bin(merkle[i], s, 32);
 	}
-
-	pthread_mutex_lock(&sctx->work_lock);
 
 	coinb1_size = strlen(coinb1) / 2;
 	coinb2_size = strlen(coinb2) / 2;
@@ -1452,6 +1530,11 @@ static bool stratum_notify(struct stratum_ctx *sctx, json_t *params)
 		sctx->xnonce2_size + coinb2_size;
 
 	sctx->job.coinbase = (uchar*)realloc(sctx->job.coinbase, sctx->job.coinbase_size);
+	if(sctx->job.coinbase == NULL)
+	{
+		applog(LOG_ERR, "Out of memory!");
+		proper_exit(2);
+	}
 	sctx->job.xnonce2 = sctx->job.coinbase + coinb1_size + sctx->xnonce1_size;
 	hex2bin(sctx->job.coinbase, coinb1, coinb1_size);
 	memcpy(sctx->job.coinbase + coinb1_size, sctx->xnonce1, sctx->xnonce1_size);
@@ -1464,7 +1547,10 @@ static bool stratum_notify(struct stratum_ctx *sctx, json_t *params)
 	sctx->job.job_id = strdup(job_id);
 	hex2bin(sctx->job.prevhash, prevhash, 32);
 
-	sctx->job.height = getblocheight(sctx);
+	if(opt_algo != ALGO_SIA)
+		sctx->job.height = getblocheight(sctx);
+	else
+		sctx->job.height = 1;
 
 	for(i = 0; i < sctx->job.merkle_count; i++)
 		free(sctx->job.merkle[i]);
@@ -1533,6 +1619,11 @@ static bool stratum_reconnect(struct stratum_ctx *sctx, json_t *params)
 
 	free(sctx->url);
 	sctx->url = (char*)malloc(32 + strlen(host));
+	if(sctx->url == NULL)
+	{
+		applog(LOG_ERR, "Out of memory!");
+		proper_exit(2);
+	}
 	sprintf(sctx->url, "stratum+tcp://%s:%d", host, port);
 
 	applog(LOG_NOTICE, "Server requested reconnection to %s", sctx->url);
@@ -1841,8 +1932,11 @@ struct thread_q *tq_new(void)
 	struct thread_q *tq;
 
 	tq = (struct thread_q *)calloc(1, sizeof(*tq));
-	if(!tq)
-		return NULL;
+	if(tq == NULL)
+	{
+		applog(LOG_ERR, "Out of memory!");
+		proper_exit(2);
+	}
 
 	INIT_LIST_HEAD(&tq->q);
 	pthread_mutex_init(&tq->mutex, NULL);
@@ -1897,8 +1991,11 @@ bool tq_push(struct thread_q *tq, void *data)
 	bool rc = true;
 
 	ent = (struct tq_ent *)calloc(1, sizeof(*ent));
-	if(!ent)
-		return false;
+	if(ent == NULL)
+	{
+		applog(LOG_ERR, "Out of memory!");
+		proper_exit(2);
+	}
 
 	ent->data = data;
 	INIT_LIST_HEAD(&ent->q_node);
@@ -1971,6 +2068,11 @@ size_t time2str(char* buf, time_t timer)
 char* atime2str(time_t timer)
 {
 	char* buf = (char*)malloc(16);
+	if(buf == NULL)
+	{
+		applog(LOG_ERR, "Out of memory!");
+		proper_exit(2);
+	}
 	memset(buf, 0, 16);
 	time2str(buf, timer);
 	return buf;
@@ -2033,7 +2135,6 @@ void do_gpu_tests(void)
 	scanhash_blake256(0, (uint32_t*)buf, tgt, 1, &done, 14);
 
 	memset(buf, 0, sizeof buf);
-	scanhash_heavy(0, (uint32_t*)buf, tgt, 1, &done, 1, 84); // HEAVYCOIN_BLKHDR_SZ=84
 
 	free(work_restart);
 	work_restart = NULL;
@@ -2073,10 +2174,6 @@ void print_hash_tests(void)
 	memset(hash, 0, sizeof hash);
 	groestlhash(&hash[0], &buf[0]);
 	printpfx("groestl", hash);
-
-	memset(hash, 0, sizeof hash);
-	heavycoin_hash(&hash[0], &buf[0], 32);
-	printpfx("heavy", hash);
 
 	memset(hash, 0, sizeof hash);
 	jackpothash(&hash[0], &buf[0]);
@@ -2155,14 +2252,17 @@ void bin2hex(char *s, const unsigned char *p, size_t len)
 char *abin2hex(const unsigned char *p, size_t len)
 {
 	char *s = (char*)malloc((len * 2) + 1);
-	if(!s)
-		return NULL;
+	if(s == NULL)
+	{
+		applog(LOG_ERR, "Out of memory!");
+		proper_exit(2);
+	}
 	bin2hex(s, p, len);
 	return s;
 }
 void applog_hex(void *data, int len)
 {
 	char* hex = abin2hex((uchar*)data, len);
-	applog(LOG_INFO, "data: %s", hex);
+	applog(LOG_INFO, "%s", hex);
 	free(hex);
 }

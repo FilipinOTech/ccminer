@@ -62,7 +62,7 @@ extern void quark_compactTest_cpu_hash_64(int thr_id, uint32_t threads, uint32_t
                                           const uint32_t *d_noncesTrue, uint32_t *nrmTrue, uint32_t *d_noncesFalse, uint32_t *nrmFalse);
 
 // X11 CPU Hash
-extern "C" void x11hash(void *output, const void *input)
+void x11hash(void *output, const void *input)
 {
 	// blake1-bmw2-grs3-skein4-jh5-keccak6-luffa7-cubehash8-shavite9-simd10-echo11
 
@@ -138,17 +138,8 @@ extern int scanhash_x11(int thr_id, uint32_t *pdata,
 	const uint32_t first_nonce = pdata[19];
 
 	cudaDeviceProp props;
-	cudaGetDeviceProperties(&props, device_map[thr_id]);
-	unsigned int intensity;
-	if(strstr(props.name, "970"))		  intensity = (256 * 256 * 22);
-	else if(strstr(props.name, "980"))    intensity = (256 * 256 * 22);
-	else if(strstr(props.name, "750 Ti")) intensity = (256 * 256 * 20);
-	else if(strstr(props.name, "750"))    intensity = (256 * 256 * 19);
-	else if(strstr(props.name, "960"))    intensity = (256 * 256 * 19);
-	else intensity = (256 * 256 * 16);
-	const uint32_t throughputmax = device_intensity(device_map[thr_id], __func__, intensity); // 19=256*256*8;
-	uint32_t throughput = min(throughputmax, max_nonce - first_nonce) & 0xfffffc00;
-	uint32_t simdthreads = (device_sm[device_map[thr_id]] > 500) ? 256 : 32;
+	CUDA_SAFE_CALL(cudaGetDeviceProperties(&props, device_map[thr_id]));
+	static THREAD uint32_t throughputmax;
 
 	if (opt_benchmark)
 		ptarget[7] = 0x4f;
@@ -157,10 +148,25 @@ extern int scanhash_x11(int thr_id, uint32_t *pdata,
 	if(!init)
 	{
 		CUDA_SAFE_CALL(cudaSetDevice(device_map[thr_id]));
-		cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync);
-		cudaDeviceSetCacheConfig(cudaFuncCachePreferL1);
+		CUDA_SAFE_CALL(cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync));
+		CUDA_SAFE_CALL(cudaDeviceSetCacheConfig(cudaFuncCachePreferL1));
 		CUDA_SAFE_CALL(cudaStreamCreate(&gpustream[thr_id]));
 		get_cuda_arch(&cuda_arch[thr_id]);
+
+		unsigned int intensity;
+#if defined WIN32 && !defined _WIN64
+		intensity = 256 * 256 * 16;
+#else
+		if(strstr(props.name, "970"))		  intensity = (256 * 256 * 22);
+		else if(strstr(props.name, "980"))    intensity = (256 * 256 * 22);
+		else if(strstr(props.name, "1070"))   intensity = (256 * 256 * 22);
+		else if(strstr(props.name, "1080"))   intensity = (256 * 256 * 22);
+		else if(strstr(props.name, "750 Ti")) intensity = (256 * 256 * 20);
+		else if(strstr(props.name, "750"))    intensity = (256 * 256 * 19);
+		else if(strstr(props.name, "960"))    intensity = (256 * 256 * 19);
+		else intensity = (256 * 256 * 19);
+#endif
+		throughputmax = device_intensity(device_map[thr_id], __func__, intensity);
 #if defined WIN32 && !defined _WIN64
 		// 2GB limit for cudaMalloc
 		if(throughputmax > 0x7fffffffULL / (64 * sizeof(uint4)))
@@ -174,13 +180,16 @@ extern int scanhash_x11(int thr_id, uint32_t *pdata,
 		quark_groestl512_cpu_init(thr_id, throughputmax);
 		quark_bmw512_cpu_init(thr_id, throughputmax);
 		x11_echo512_cpu_init(thr_id, throughputmax);
-		if (x11_simd512_cpu_init(thr_id, throughputmax) != 0) {
-			return 0;
-		}
-		CUDA_SAFE_CALL(cudaMalloc(&d_hash, 64 * throughputmax)); // why 64 ?
-		CUDA_SAFE_CALL(cudaMallocHost(&(h_found), 2 * sizeof(uint32_t)));
+		x11_simd512_cpu_init(thr_id, throughputmax);
+
+		CUDA_SAFE_CALL(cudaMalloc(&d_hash, 16 * 4 * throughputmax));
+		CUDA_SAFE_CALL(cudaMallocHost(&h_found, 2 * sizeof(uint32_t)));
+		mining_has_stopped[thr_id] = false;
 		init = true;
 	}
+	uint32_t throughput = min(throughputmax, max_nonce - first_nonce) & 0xfffffc00;
+	uint32_t simdthreads = (device_sm[device_map[thr_id]] > 500) ? 256 : 32;
+
 	uint32_t endiandata[20];
 	for (int k=0; k < 20; k++)
 		be32enc(&endiandata[k], pdata[k]);

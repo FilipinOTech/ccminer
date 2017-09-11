@@ -17,7 +17,7 @@ extern uint32_t* whirlpool512_cpu_finalhash_64(int thr_id, uint32_t threads, uin
 
 
 // CPU Hash function
-extern "C" void wcoinhash(void *state, const void *input)
+void wcoinhash(void *state, const void *input)
 {
 	sph_whirlpool_context ctx_whirlpool;
 
@@ -80,6 +80,7 @@ extern int scanhash_whc(int thr_id, uint32_t *pdata,
 
 		CUDA_SAFE_CALL(cudaMalloc(&d_hash, 16 * sizeof(uint32_t) * throughputmax));
 		x15_whirlpool_cpu_init(thr_id, throughputmax, 1 /* old whirlpool */);
+		mining_has_stopped[thr_id] = false;
 
 		init = true;
 	}

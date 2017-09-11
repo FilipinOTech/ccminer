@@ -736,12 +736,7 @@ x11_simd512_gpu_expand_64(uint32_t threads, uint32_t startNounce, const uint64_t
 	}
 }
 
-__global__
-#if __CUDA_ARCH__ > 500
-__launch_bounds__(TPB, 2)
-#else
-__launch_bounds__(32, 32)
-#endif
+__global__ __launch_bounds__(TPB, 2)
 void x11_simd512_gpu_compress_64_maxwell(uint32_t threads, uint32_t startNounce, uint64_t *g_hash, uint4 *g_fft4)
 {
 	const uint32_t thread = (blockDim.x * blockIdx.x + threadIdx.x);
@@ -845,4 +840,5 @@ void x11_simd512_cpu_hash_64(int thr_id, uint32_t threads, uint32_t startNounce,
 		x11_simd512_gpu_compress2_64 << < grid, block, 0, gpustream[thr_id]>>> (threads, startNounce, (uint64_t*)d_hash, d_temp4[thr_id], d_state[thr_id]);
 		x11_simd512_gpu_final_64 << <grid, block, 0, gpustream[thr_id] >> > (threads, startNounce, (uint64_t*)d_hash, d_temp4[thr_id], d_state[thr_id]);
 	}
+	CUDA_SAFE_CALL(cudaGetLastError());
 }

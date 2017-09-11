@@ -32,7 +32,7 @@ extern void jackpot_compactTest_cpu_hash_64(int thr_id, uint32_t threads, uint32
 extern uint32_t cuda_check_hash_branch(int thr_id, uint32_t threads, uint32_t startNounce, uint32_t *d_nonceVector, uint32_t *d_inputHash);
 
 // Original jackpothash Funktion aus einem miner Quelltext
-extern "C" unsigned int jackpothash(void *state, const void *input)
+unsigned int jackpothash(void *state, const void *input)
 {
     sph_blake512_context     ctx_blake;
     sph_groestl512_context   ctx_groestl;
@@ -80,8 +80,8 @@ extern int scanhash_jackpot(int thr_id, uint32_t *pdata,
 {
 	const uint32_t first_nonce = pdata[19];
 
-	uint32_t throughput = device_intensity(device_map[thr_id], __func__, 1U << 20);
-	throughput = min(throughput, (max_nonce - first_nonce)) & 0xfffffc00;
+	uint32_t throughputmax = device_intensity(device_map[thr_id], __func__, 1U << 20);
+	uint32_t throughput = min(throughputmax, (max_nonce - first_nonce)) & 0xfffffc00;
 
 	if (opt_benchmark)
 		ptarget[7] = 0x000f;
@@ -101,19 +101,20 @@ extern int scanhash_jackpot(int thr_id, uint32_t *pdata,
 		CUDA_SAFE_CALL(cudaStreamCreate(&gpustream[thr_id]));
 		get_cuda_arch(&cuda_arch[thr_id]);
 
-		CUDA_SAFE_CALL(cudaMalloc(&d_hash, 16 * sizeof(uint32_t) * throughput));
+		CUDA_SAFE_CALL(cudaMalloc(&d_hash, 16 * sizeof(uint32_t) * throughputmax));
 
-		jackpot_keccak512_cpu_init(thr_id, throughput);
-		jackpot_compactTest_cpu_init(thr_id, throughput);
-		quark_groestl512_cpu_init(thr_id, throughput);
+		jackpot_keccak512_cpu_init(thr_id, throughputmax);
+		jackpot_compactTest_cpu_init(thr_id, throughputmax);
+		quark_groestl512_cpu_init(thr_id, throughputmax);
 		quark_skein512_cpu_init(thr_id);
-		cuda_check_cpu_init(thr_id, throughput);
+		cuda_check_cpu_init(thr_id, throughputmax);
 
-		cudaMalloc(&d_branch1Nonces, sizeof(uint32_t)*throughput*2);
-		cudaMalloc(&d_branch2Nonces, sizeof(uint32_t)*throughput*2);
-		cudaMalloc(&d_branch3Nonces, sizeof(uint32_t)*throughput*2);
+		cudaMalloc(&d_branch1Nonces, sizeof(uint32_t)*throughputmax * 1.25/2);
+		cudaMalloc(&d_branch2Nonces, sizeof(uint32_t)*throughputmax * 1.25/2);
+		cudaMalloc(&d_branch3Nonces, sizeof(uint32_t)*throughputmax * 1.25); // 25% more than we need, just in case
 
-		CUDA_SAFE_CALL(cudaMalloc(&d_jackpotNonces, sizeof(uint32_t)*throughput*2));
+		CUDA_SAFE_CALL(cudaMalloc(&d_jackpotNonces, sizeof(uint32_t)*throughputmax * 2));
+		mining_has_stopped[thr_id] = false;
 
 		init = true;
 	}
@@ -222,14 +223,16 @@ extern int scanhash_jackpot(int thr_id, uint32_t *pdata,
 					}
 					else
 					{
-						applog(LOG_INFO, "GPU #%d: result for nonce $%08X does not validate on CPU (%d rounds)!", device_map[thr_id], secNonce, rounds);
+						if(opt_verify)
+							applog(LOG_INFO, "GPU #%d: result for nonce $%08X does not validate on CPU (%d rounds)!", device_map[thr_id], secNonce, rounds);
 					}
 				}
 				pdata[19] = foundNonce;
 				return res;
 			}
 			else {
-				applog(LOG_INFO, "GPU #%d: result for nonce $%08X does not validate on CPU (%d rounds)!", device_map[thr_id], foundNonce, rounds);
+				if(opt_verify)
+					applog(LOG_INFO, "GPU #%d: result for nonce $%08X does not validate on CPU (%d rounds)!", device_map[thr_id], foundNonce, rounds);
 			}
 		}
 
