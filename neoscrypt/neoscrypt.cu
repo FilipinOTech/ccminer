@@ -37,12 +37,15 @@ int scanhash_neoscrypt(bool stratum, int thr_id, uint32_t *pdata,
 		cudaDeviceProp props;
 		cudaGetDeviceProperties(&props, device_map[thr_id]);
 		unsigned int cc = props.major * 10 + props.minor;
-		if(cc < 32)
+		if(cc <= 30)
 		{
 			applog(LOG_ERR, "GPU #%d: this gpu is not supported", device_map[thr_id]);
 			mining_has_stopped[thr_id] = true;
 			proper_exit(2);
 		}
+		if(cc == 30)
+			use_tpruvot = true;
+
 		unsigned int intensity = (256 * 64 * 1); // -i 14
 		if(strstr(props.name, "1080 Ti"))
 		{
@@ -52,6 +55,7 @@ int scanhash_neoscrypt(bool stratum, int thr_id, uint32_t *pdata,
 		else if(strstr(props.name, "1080"))
 		{
 			intensity = 256 * 64 * 5;
+			use_tpruvot = true;
 		}
 		else if(strstr(props.name, "1070"))
 		{
