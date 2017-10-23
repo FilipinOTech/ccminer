@@ -61,6 +61,9 @@ BOOL WINAPI ConsoleHandler(DWORD);
 
 double expectedblocktime(const uint32_t *target);
 
+extern void get_cuda_arch(int *version);
+extern int cuda_arch[MAX_GPUS];
+
 // from cuda.cpp
 int cuda_num_devices();
 void cuda_devicenames();
@@ -109,7 +112,6 @@ static const char *algo_names[] = {
 	"sia",
 	"skein",
 	"s3",
-	"spread",
 	"whirl",
 	"whirlpoolx",
 	"x11",
@@ -221,7 +223,7 @@ Options:\n\
 			fresh       Freshcoin (shavite 80)\n\
 			fugue256    Fuguecoin\n\
 			groestl     Groestlcoin\n\
-			jackpot     Jackpot\n\
+			jackpot     Jackpot (JHA)\n\
 			keccak      Keccak-256 (Maxcoin)\n\
 			luffa       Doomcoin\n\
 			lyra2v2     VertCoin\n\
@@ -234,14 +236,12 @@ Options:\n\
 			sia         Siacoin (at pools compatible to siamining.com) \n\
 			skein       Skein SHA2 (Skeincoin)\n\
 			s3          S3 (1Coin)\n\
-			spread      Spread\n\
 			x11         X11 (DarkCoin)\n\
 			x13         X13 (MaruCoin)\n\
 			x14         X14\n\
 			x15         X15\n\
 			x17         X17 (peoplecurrency)\n\
 			vanilla     Blake 256 8 rounds\n\
-			yescrypt    yescrypt\n\
 			whirl       Whirlcoin (old whirlpool)\n\
 			whirlpoolx  Vanillacoin \n\
   -d, --devices         Comma separated list of CUDA devices to use. \n\
@@ -282,7 +282,6 @@ Options:\n\
       --syslog-prefix=... allow to change syslog tool name\n\
   -B, --background      run the miner in the background\n\
       --benchmark       run in offline benchmark mode\n\
-      --cputest         debug hashes from cpu algorithms\n\
       --no-cpu-verify   don't verify the found results\n\
   -c, --config=FILE     load a JSON-format configuration file\n\
   -V, --version         display version information and exit\n\
@@ -1380,6 +1379,8 @@ static void *miner_thread(void *userdata)
 		}
 	}
 
+	get_cuda_arch(&cuda_arch[thr_id]);
+
 	while(1)
 	{
 		// &work.data[19]
@@ -2444,6 +2445,8 @@ static void parse_arg(int key, char *arg)
 		break;
 	case 'd': // CB
 	{
+		int i;
+		bool gpu[32] = {false};
 		int ngpus = cuda_num_devices();
 		char * pch = strtok(arg, ",");
 		opt_n_threads = 0;
@@ -2451,12 +2454,21 @@ static void parse_arg(int key, char *arg)
 		{
 			if(pch[0] >= '0' && pch[0] <= '9' && pch[1] == '\0')
 			{
-				if(atoi(pch) < ngpus)
-					device_map[opt_n_threads++] = atoi(pch);
+				i = atoi(pch);
+				if(i < ngpus && gpu[i] == false)
+				{
+					gpu[i] = true;
+					device_map[opt_n_threads++] = i;
+				}
 				else
 				{
-					applog(LOG_ERR, "Non-existant CUDA device #%d specified in -d option", atoi(pch));
-					proper_exit(1);
+					if(gpu[i] == true)
+						applog(LOG_WARNING, "Selected gpu #%d more than once in -d option. This is not supported.", i);
+					else
+					{
+						applog(LOG_ERR, "Non-existant CUDA device #%d specified in -d option", i);
+						proper_exit(1);
+					}
 				}
 			}
 			else
@@ -2779,7 +2791,6 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "%s: no URL supplied\n", argv[0]);
 		show_usage_and_exit(1);
 	}
-	cuda_devicereset();
 
 	if(!rpc_userpass)
 	{
