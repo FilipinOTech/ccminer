@@ -1264,7 +1264,17 @@ static bool stratum_gen_work(struct stratum_ctx *sctx, struct work *work)
 		work->data[10] = le32dec(sctx->job.ntime);
 		work->data[11] = 0;
 		for(i = 0; i < 8; i++)
-			work->data[12 + i] = le32dec((uint32_t *)(merkle_root + 33) + i);
+			work->data[12 + i] = le32dec((uint32_t *)(merkle_root+33) + i);
+	}
+
+	// HeavyCoin (vote / reward)
+	if(opt_algo == ALGO_HEAVY)
+	{
+		work->maxvote = 2048;
+		uint16_t *ext = (uint16_t*)(&work->data[20]);
+		ext[0] = opt_vote;
+		ext[1] = be16dec(sctx->job.nreward);
+		// applog(LOG_DEBUG, "DEBUG: vote=%hx reward=%hx", ext[0], ext[1]);
 	}
 
 	pthread_mutex_unlock(&sctx->work_lock);
@@ -1420,7 +1430,9 @@ static void *miner_thread(void *userdata)
 					sleep(3);
 					pthread_mutex_lock(&g_work_lock);
 				}
+				g_work_time = time(NULL);
 			}
+			pthread_mutex_unlock(&g_work_lock);
 		}
 		else
 		{
@@ -1454,7 +1466,6 @@ static void *miner_thread(void *userdata)
 			work.difficulty = g_work.difficulty;
 			work.height = g_work.height;
 		}
-
 		int different;
 		if(opt_algo != ALGO_SIA)
 			different = memcmp(work.data, g_work.data, wcmplen);

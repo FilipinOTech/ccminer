@@ -210,7 +210,14 @@ void siahash(const void *data, unsigned int len, void *hash)
 
 int scanhash_sia(int thr_id, uint32_t *pdata, uint32_t *ptarget, uint32_t max_nonce, uint32_t *hashes_done)
 {
-	static THREAD uint32_t *h_nounce = nullptr;
+	static THREAD uint64_t *h_nounce = nullptr;
+
+	extern void applog_hex(void *data, int len);
+	applog_hex(pdata, 32);
+	applog_hex(pdata+8, 8);
+	applog_hex(pdata+10, 8);
+	applog_hex(pdata+12, 32);
+
 	const uint32_t first_nonce = pdata[8];
 	static THREAD uint32_t throughputmax;
 
